@@ -1,0 +1,69 @@
+<?php
+/**
+ * PineGrap - Enterprise Website Platform
+ *
+ * Originally developed as LiveSite by Camelback Web Architects.
+ * Since 2017, maintained and evolved by Erdal Güral (Kodpen) under the name PineGrap.
+ * The final LiveSite update (2019) has been integrated into PineGrap.
+ * LiveSite remains available as a separate downloadable legacy version.
+ *
+ * @author      Camelback Web Architects
+ *              Erdal Güral (Kodpen)
+ * @link        https://livesite.com
+ *              https://kodpen.com
+ * @copyright   2001–2019 Camelback Consulting, Inc.
+ *              2016–2025 Kodpen
+ * @license     https://opensource.org/licenses/mit-license.html MIT License
+ */
+
+function delete_order($request) {
+
+    $order = db_item(
+        "SELECT id, order_number, reference_code FROM orders
+        WHERE id = '" . e($request['order']['id']) . "'");
+
+    if (!$order) {
+        return error_response(lang('The order could not be found.'));
+    }
+
+    db("DELETE FROM orders WHERE id = '" . e($order['id']) . "'");
+    db("DELETE FROM order_items WHERE order_id = '" . e($order['id']) . "'");
+    db("DELETE FROM ship_tos WHERE order_id = '" . e($order['id']) . "'");
+    db("DELETE FROM order_item_gift_cards WHERE order_id = '" . e($order['id']) . "'");
+    db("DELETE FROM applied_gift_cards WHERE order_id = '" . e($order['id']) . "'");
+    db("DELETE FROM form_data WHERE (order_id = '" . e($order['id']) . "') AND (order_id != '0')");
+    db("DELETE FROM shipping_tracking_numbers WHERE order_id = '" . e($order['id']) . "'");
+
+    // Cancel order abandoned auto campaign for this order, if one exists.
+    db(
+        "UPDATE email_campaigns
+        SET
+            email_campaigns.status = 'cancelled',
+            email_campaigns.last_modified_user_id = '',
+            email_campaigns.last_modified_timestamp = UNIX_TIMESTAMP()
+        WHERE
+            (email_campaigns.action = 'order_abandoned')
+            AND
+            (
+                (email_campaigns.status = 'ready')
+                OR (email_campaigns.status = 'paused')
+            )
+            AND (email_campaigns.order_id = '" . e($order['id']) . "')");
+
+    // If the order that is being deleted is the active order then remove active order from session
+    if ($order['id'] == $_SESSION['ecommerce']['order_id']) {
+        unset($_SESSION['ecommerce']['order_id']);
+    }
+
+    if ($order['order_number']) {
+        $log_code = $order['order_number'];
+    } else {
+        $log_code = $order['reference_code'];
+    }
+
+    log_activity(lang(array('string'=>'Order ({var:1}) was deleted.','vars'=>$log_code)) );
+
+    return array(
+        'status' => 'success',
+        'order' => $order);
+}

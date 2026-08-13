@@ -1,0 +1,126 @@
+<?php
+/**
+ * PineGrap - Enterprise Website Platform
+ *
+ * Originally developed as LiveSite by Camelback Web Architects.
+ * Since 2017, maintained and evolved by Erdal Güral (Kodpen) under the name PineGrap.
+ * The final LiveSite update (2019) has been integrated into PineGrap.
+ * LiveSite remains available as a separate downloadable legacy version.
+ *
+ * @author      Camelback Web Architects
+ *              Erdal Güral (Kodpen)
+ * @link        https://livesite.com
+ *              https://kodpen.com
+ * @copyright   2001–2019 Camelback Consulting, Inc.
+ *              2016–2025 Kodpen
+ * @license     https://opensource.org/licenses/mit-license.html MIT License
+ */
+
+include('init.php');
+$user = validate_user();
+validate_area_access($user, 'administrator');
+
+if (!isset($_POST['name'])) {
+    $query = "SELECT dregion_name, dregion_code "
+            ."FROM dregion "
+            ."WHERE dregion_id = '" . escape($_GET['id']) . "'";
+    $result = mysqli_query(db::$con, $query) or output_error('Query failed');
+    $row = mysqli_fetch_array($result);
+    $dregion_name = $row['dregion_name'];
+    $dregion_code = $row['dregion_code'];
+
+    print 
+    pg_page_shell([
+        'title'=> lang(array('string'=>'Edit {var:1}','vars'=>lang('Dynamic Region'))),
+        'extra classes'=>'design',
+        'icon'=>'design',
+        'heading'=>lang(array('string'=>'Edit {var:1}','vars'=>lang('Dynamic Region'))),
+        'cancel'=>array('enable'=>'true','url'=>'view_regions.php'),
+        'breadcrumb' => array(
+            array('label' => lang('All Dynamic Regions'), 'url' => OUTPUT_PATH . OUTPUT_SOFTWARE_DIRECTORY . '/view_regions.php?filter=all_dynamic_regions'),
+            array('label' => lang(array('string'=>'Edit {var:1}','vars'=>lang('Dynamic Region')))),
+        ),
+    ]) . '
+            <div class="row">
+            <div class="col-12">
+                <div class="row mb-2  flex-wrap">
+                    <div class="col-12 col-sm-12 text-center text-md-start">
+                        <h2 class="d-inline-block text-break header-content-for-add-page" data-bs-content="' . lang('Update this dynamic region of shared content. (A rename will require its tag to be updated in any page styles.)') . '" title="' . lang(array('string'=>'Edit {var:1}','vars'=>lang('Dynamic Region'))) . '">[' . h($dregion_name) . ']</h2>
+                        <p>' . lang('Page Style Body Tag') . ': <strong>' . h('<dregion>' . $dregion_name . '</dregion>') . '</strong></p>
+                    </div>
+                </div>
+                <form action="edit_dynamic_region.php" method="post">
+                    ' . get_token_field() . '
+                    <input type="hidden" name="id" value="' . h($_GET['id']) . '" />
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card my-4">
+                                <div class="card-header bg-reset border-0 text-uppercase h5 text-primary fw-bold">
+                                    ' . lang('Options') . '
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-12 col-md-6 my-2">
+                                            <label for="name" class="form-label">' . lang(array('string'=>'{var:1} Name','vars'=>lang('Designer Region'))) . '</label>
+                                            <div class="input-group">
+                                                <div class="input-group-text">' . h('<dregion>') . '</div>
+                                                <input value="' . h($dregion_name) . '" name="name" id="name" type="text" class="form-control add-header-content-updater" maxlength="100" />
+                                                <div class="input-group-text">' . h('</dregion>') . '</div>
+                                            </div>
+                                        </div>
+                                        <h5 class="mt-5">' . lang('PHP Code to appear on associated Pages') . '</h5>
+                                        <div class="col-12 my-2">
+                                            <label for="name" class="form-label">' . lang('PHP Code Snippet') . '</label>
+                                            <textarea name="code" id="code" rows="30" cols="60" wrap="off">' . h($dregion_code) . '</textarea>
+                                            ' . get_codemirror_includes() . '
+                                            ' . get_codemirror_javascript(array('id' => 'code', 'code_type' => 'php')) . '
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <nav class="buttons navigation text-center position-sticky mb-4" style="bottom:.5rem;" aria-label="data edit buttons ">
+                        <div class="container">
+                            <div class=" btn-group flex-wrap justify-content-center">
+                                <button type="submit" id="submit_save" name="submit_save" value="Save" class="btn my-1 btn-success" data-loading-content="' . lang(array('string'=>'Saving') ) . '"><span class="material-icons me-2">save</span><span class="btn-text">' . lang(array('string'=>'Save') ) . '</span></button>
+                                <button type="submit" name="submit_delete" value="Delete" class="btn my-1  btn-danger " data-loading-content="' . lang(array('string'=>'Deleting') ) . '" data-confirm-content="' . lang(array('string'=>'WARNING: This {var:1} will be permanently deleted.','vars'=>array(lang('dynamic region')))) . '"><span class="material-icons me-2">delete</span><span class="btn-text" >' . lang(array('string'=>'Delete') ) . '</span></button>
+                            </div>
+                        </div>
+                    </nav>
+                </form>
+            </div>
+        </div>
+    </main>' .
+    output_footer();
+} else {
+    validate_token_field();
+    
+    include_once('liveform.class.php');
+    
+    // if region was selected for delete
+    if ($_POST['submit_delete'] == 'Delete') {
+        $query = "DELETE FROM dregion "
+                ."WHERE dregion_id = '" . escape($_POST['id']) . "'";
+        $result = mysqli_query(db::$con, $query) or output_error('Query failed');
+        log_activity(lang(array('string'=>'{var:1} ({var:2}) was deleted','vars'=>array(lang('dynamic region'), $_POST['name']) )), $_SESSION['sessionusername']);
+        $notice = lang(array('string'=>'{var:1} was deleted successfully','vars'=>lang('Dynamic Region') ));
+    } else {
+        $_POST['name'] = trim($_POST['name']);
+        // update region
+        $query = "UPDATE dregion "
+                ."SET dregion_name = '" . escape($_POST['name']) . "', "
+                    ."dregion_code = '" . escape($_POST['code']) . "', "
+                    ."dregion_user = {$user['id']}, "
+                    ."dregion_timestamp = UNIX_TIMESTAMP() "
+                ."WHERE dregion_id = '" . escape($_POST['id']) . "'";
+        $result = mysqli_query(db::$con, $query) or output_error('Query failed');
+        log_activity(lang(array('string'=>'{var:1} ({var:2}) was modified','vars'=>array(lang('dynamic region'), $_POST['name']) )), $_SESSION['sessionusername']);
+        $notice = lang(array('string'=>'{var:1} was edited successfully','vars'=>lang('Dynamic Region') ));
+    }
+    
+    $liveform_view_styles = new liveform('view_regions');
+    $liveform_view_styles->add_notice($notice);
+    header('Location: ' . URL_SCHEME . $_SERVER['HTTP_HOST'] . PATH . SOFTWARE_DIRECTORY . '/view_regions.php?filter=all_dynamic_regions');
+}
+?>
